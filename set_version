@@ -23,6 +23,7 @@ import sys
 import tarfile
 import zipfile
 import codecs
+from contextlib import closing
 
 try:
     from packaging.version import LegacyVersion, Version, parse
@@ -34,6 +35,11 @@ except ImportError as exc:
 else:
     HAS_PACKAGING = True
 
+if sys.version_info < (2,7):
+    _orig_subn = re.subn
+    def _new_subn(pattern, repl, string, count=0, flags=0):
+        return _orig_subn(re.compile(pattern, flags=flags), repl, string, count=count)
+    re.subn = _new_subn
 
 DEBUG = False
 
@@ -118,8 +124,8 @@ class VersionDetector(object):
         for f in filter(lambda x: x.endswith(suffixes), self.file_list):
             # handle tarfiles
             if tarfile.is_tarfile(f):
-                with tarfile.open(f) as tf:
-                    v = self.__get_version(tf.getnames())
+                with closing(tarfile.open(f)) as tf:
+                    v = self.__get_version(tf.getnames(), basename)
                     if v:
                         return v
             # handle zipfiles
@@ -190,7 +196,7 @@ class PackageTypeDetector(object):
     def _is_python(f):
         names = []
         if tarfile.is_tarfile(f):
-            with tarfile.open(f) as tf:
+            with closing(tarfile.open(f)) as tf:
                 names = tf.getnames()
         if zipfile.is_zipfile(f):
             with zipfile.ZipFile(f, 'r') as zf:
